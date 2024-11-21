@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizing Missing Persons Data in Kenya </title>
+    <!-- D3.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"
+        integrity="sha512-vc58qvvBdrDR4etbxMdlTt4GBQk1qjvyORR2nrsPsFPyrs+/u5c3+1Ct6upOgdZoIl7eq6k3a1UPDSNAQi/32A=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- TopoJSON Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+    <style>
+        .tooltip,
+        .description {
+            position: absolute;
+            background-color: white;
+            border: 1px solid black;
+            border-radius: 5px;
+            padding: 10px;
+            pointer-events: none;
+            opacity: 0.9;
+            visibility: hidden;
+            font-size: 12px;
+            box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.3);
+            transition: opacity 0.2s;
+            z-index: 10;
+            max-width: 300px;
+            overflow-y: auto;
+        }
+
+        .description {
+            max-width: 400px;
+
+        }
+
+        .county {
+            fill: #ccc;
+        }
+
+        /* Optional: Style for data points */
+        .person {
+            cursor: pointer;
+        }
+
+        /* Container for the Map */
+        #map-container {
+            position: relative;
+            width: 100%;
+            height: 100vh; /* Full viewport height */
+        }
+
+        /* Style for tooltip */
+        #tooltip {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            pointer-events: none;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            z-index: 10;
+        }
+
+        /* Style for buttons */
+        #buttons {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 5;
+        }
+
+        #buttons button {
+            margin: 2px;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+
+        /* Ensure the SVG scales correctly */
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="buttons" id="buttons"></div>
+    <div id="map-container">
+        <svg id="canvas" width="800" height="500"></svg>
+        <div class="tooltip" id="tooltip"></div>
+        <div class="description" id="description"></div>
+    </div>
+
+    <!-- Separate JavaScript File -->
+    <script src="scripts.js"></script>
+</body>
+
+</html>
