@@ -1,12 +1,16 @@
 /**
- * Select the HTML tooltip & description box.
+ * Select the HTML elements.
  */
 const tooltip = d3.select("#tooltip");
 const description = d3.select("#description");
 const buttons = d3.select("#buttons");
+const loading = d3.select("#loading");
+const totalCases = d3.select("#total-cases");
+const currentYear = d3.select("#current-year");
+const visibleCases = d3.select("#visible-cases");
 
 const body = d3.select("body");
-const margins = { top: 50, right: 20, bottom: 10, left: 5 };
+const margins = { top: 20, right: 20, bottom: 20, left: 20 };
 const svg = d3.select("svg#canvas");
 
 const width = +svg.attr("width");
@@ -30,6 +34,10 @@ let currentZoomedCounty = null;
 const MIN_RADIUS = 2;
 const MAX_RADIUS = 10;
 
+// Global data variables
+let allMissingPersonsData = [];
+let currentFilteredData = [];
+
 /**
  * Calculate radius with bounds.
  * @returns {number} The calculated radius.
@@ -37,6 +45,31 @@ const MAX_RADIUS = 10;
 function calculateRadius() {
     const baseRadius = 4 / k;
     return Math.max(MIN_RADIUS, Math.min(baseRadius, MAX_RADIUS));
+}
+
+/**
+ * Update statistics display.
+ * @param {Array} data - The data to display statistics for.
+ * @param {string} year - The current year filter.
+ */
+function updateStatistics(data, year = "All") {
+    totalCases.text(allMissingPersonsData.length);
+    currentYear.text(year);
+    visibleCases.text(data.length);
+}
+
+/**
+ * Show loading state.
+ */
+function showLoading() {
+    loading.style("display", "block");
+}
+
+/**
+ * Hide loading state.
+ */
+function hideLoading() {
+    loading.style("display", "none");
 }
 
 /**
@@ -89,10 +122,13 @@ window.addEventListener("resize", updateDimensions);
  * Load data and render the map.
  */
 const loadData = async function () {
-    let kenya = await d3.json('./datasets/kenya.topojson');
-    countiesGeoJSON = topojson.feature(kenya, kenya.objects.KENADM1gbOpen);
-    projection = d3.geoMercator().fitSize([mapwidth, mapHeight], countiesGeoJSON);
-    geoPath = d3.geoPath().projection(projection);
+    try {
+        showLoading();
+        
+        let kenya = await d3.json('./datasets/kenya.topojson');
+        countiesGeoJSON = topojson.feature(kenya, kenya.objects.KENADM1gbOpen);
+        projection = d3.geoMercator().fitSize([mapwidth, mapHeight], countiesGeoJSON);
+        geoPath = d3.geoPath().projection(projection);
 
     let zoomIdentity = d3.zoomIdentity;
     k = zoomIdentity.k;
@@ -137,10 +173,10 @@ const loadData = async function () {
     ];
 
     // Load missing persons data
-    let missingPersonsData = await d3.json("./datasets/missing_voices_detailed_data.json");
+    allMissingPersonsData = await d3.json("./datasets/missing_voices_detailed_data.json");
 
     // Remove those who aren't yet confirmed dead
-    missingPersonsData = missingPersonsData.filter(person => person["Manner of Death"] !== "MISSING THEN FOUND" && person["Manner of Death"] !== "MISSING");
+    allMissingPersonsData = allMissingPersonsData.filter(person => person["Manner of Death"] !== "MISSING THEN FOUND" && person["Manner of Death"] !== "MISSING");
 
     /**
      * Extract and append county information to each data entry.
@@ -158,18 +194,30 @@ const loadData = async function () {
 
     // Create filter buttons
     buttons.append("button")
-        .text("Clear Filter")
+        .text("All Years")
         .attr("id", "clear-filter")
-        .on("click", () => {
-            showPeople(missingPersonsData, null); // Passing null to show all data
+        .classed("active", true)
+        .on("click", function() {
+            // Remove active class from all buttons
+            buttons.selectAll("button").classed("active", false);
+            // Add active class to clicked button
+            d3.select(this).classed("active", true);
+            showPeople(allMissingPersonsData, null);
+            updateStatistics(allMissingPersonsData, "All");
         });
 
     years.forEach(year => {
         buttons.append("button")
             .text(year)
             .attr("id", year)
-            .on("click", () => {
-                showPeople(missingPersonsData, parseInt(year));
+            .on("click", function() {
+                // Remove active class from all buttons
+                buttons.selectAll("button").classed("active", false);
+                // Add active class to clicked button
+                d3.select(this).classed("active", true);
+                const filteredData = allMissingPersonsData.filter(d => d.year === parseInt(year));
+                showPeople(filteredData, parseInt(year));
+                updateStatistics(filteredData, year);
             });
     });
 
@@ -188,11 +236,14 @@ const loadData = async function () {
         });
     };
 
-    extractAndAppendCounty(missingPersonsData, countyNames);
-    extractTheYear(missingPersonsData, years);
+    extractAndAppendCounty(allMissingPersonsData, countyNames);
+    extractTheYear(allMissingPersonsData, years);
 
     // Filter out entries with unknown person data
-    missingPersonsData = missingPersonsData.filter(person => person.county !== "unknown" && person["Manner of Death"] !== "MISSING THEN FOUND" && person["Manner of Death"] !== "MISSING");
+    allMissingPersonsData = allMissingPersonsData.filter(person => person.county !== "unknown" && person["Manner of Death"] !== "MISSING THEN FOUND" && person["Manner of Death"] !== "MISSING");
+    
+    // Set initial filtered data
+    currentFilteredData = allMissingPersonsData;
 
     /**
      * Generate a random point within a given polygon (county).
@@ -215,18 +266,20 @@ const loadData = async function () {
     }
 
     // Add random points to each data entry
-    missingPersonsData.forEach(d => {
+    allMissingPersonsData.forEach(d => {
         const countyName = d.county.toLowerCase();
         const countyFeature = countyMap[countyName];
-        const randomPoint = randomPointInCounty(countyFeature);
-        d.randomPoint = randomPoint;
+        if (countyFeature) {
+            const randomPoint = randomPointInCounty(countyFeature);
+            d.randomPoint = randomPoint;
+        }
     });
 
     // Define gradients and filters once to prevent multiple definitions
     const defs = svg.append("defs");
 
     /**
-     * Blood gradient with a highlight effect.
+     * Simple red gradient for data points.
      */
     const gradient = defs.append("radialGradient")
         .attr("id", "blood-gradient")
@@ -236,22 +289,14 @@ const loadData = async function () {
 
     gradient.append("stop")
         .attr("offset", "0%")
-        .attr("stop-color", "#FF4D4D"); 
-
-    gradient.append("stop")
-        .attr("offset", "50%")
-        .attr("stop-color", "#FF0000"); 
-
-    gradient.append("stop")
-        .attr("offset", "85%")
-        .attr("stop-color", "#8A0303"); 
+        .attr("stop-color", "#e53e3e"); 
 
     gradient.append("stop")
         .attr("offset", "100%")
-        .attr("stop-color", "#4A0101"); // Deepest red edge
+        .attr("stop-color", "#c53030");
 
     /**
-     * Shadow filter with dynamic blur and offset.
+     * Simple shadow filter.
      */
     const filter = defs.append("filter")
         .attr("id", "blood-shadow")
@@ -262,32 +307,17 @@ const loadData = async function () {
 
     filter.append("feGaussianBlur")
         .attr("in", "SourceAlpha")
-        .attr("stdDeviation", 4); 
+        .attr("stdDeviation", 2); 
 
     filter.append("feOffset")
-        .attr("dx", 3)
-        .attr("dy", 3);
+        .attr("dx", 1)
+        .attr("dy", 1);
 
     filter.append("feMerge")
         .selectAll("feMergeNode")
         .data(["blur", "SourceGraphic"])
         .join("feMergeNode")
         .attr("in", d => d);
-
-    const glowFilter = defs.append("filter")
-        .attr("id", "blood-glow")
-        .attr("x", "-50%")
-        .attr("y", "-50%")
-        .attr("width", "200%")
-        .attr("height", "200%");
-
-    glowFilter.append("feGaussianBlur")
-        .attr("stdDeviation", 6)
-        .attr("result", "coloredBlur");
-
-    const feMerge = glowFilter.append("feMerge");
-    feMerge.append("feMergeNode").attr("in", "coloredBlur");
-    feMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
 
     /**
@@ -296,10 +326,17 @@ const loadData = async function () {
      * @param {Number|null} year - The year to filter by. If null, show all.
      */
     function showPeople(data, year) {
-        if (year != null) data = data.filter(d => d.year === year);
+        // Filter data if year is specified
+        if (year != null) {
+            data = data.filter(d => d.year === year);
+        }
+        
+        // Filter out data points without randomPoint
+        data = data.filter(d => d.randomPoint);
+        
         // Plot the data points as enhanced droplets
         map.selectAll("circle.person")
-            .data(data, d => d.Name) // Use a unique key if possible
+            .data(data, d => d.Name + d.Location) // Use a more unique key
             .join(
                 enter => enter.append("circle")
                     .attr("class", "person")
@@ -307,16 +344,23 @@ const loadData = async function () {
                     .attr("cy", d => projection(d.randomPoint)[1])
                     .attr("r", () => calculateRadius()) 
                     .style("fill", "url(#blood-gradient)")
-                    .style("filter", "url(#blood-shadow), url(#blood-glow)")
-                    .style("opacity", 0.8)
+                    .style("filter", "url(#blood-shadow)")
+                    .style("opacity", 0.9)
                     .style("pointer-events", "all") // Ensure entire circle is clickable
                     .on("mouseover", function (event, d) {
+                        // Set tooltip content
                         tooltip.html(`
                             <strong>Name:</strong> ${d.Name}<br/>
                             <strong>Location:</strong> ${d.Location}<br/>
                             <strong>Cause of Death:</strong> ${d["Manner of Death"]}<br/>
                             <strong>Perpetrator:</strong> ${d["Perpetrator"]}<br/>
-                        `)
+                        `);
+
+                        // Position tooltip relative to mouse
+                        const [mouseX, mouseY] = d3.pointer(event, document.body);
+                        tooltip
+                            .style("left", (mouseX + 10) + "px")
+                            .style("top", (mouseY - 10) + "px")
                             .style("visibility", "visible")
                             .style("opacity", 1);
 
@@ -327,27 +371,11 @@ const loadData = async function () {
                             .attr("stroke-width", 1 / k);
                     })
                     .on("mousemove", function (event) {
-                        // Get the position of the mouse relative to the page
-                        const padding = 10;
-                        let left = event.pageX + padding;
-                        let top = event.pageY + padding;
-
-                        const tooltipNode = tooltip.node();
-                        const tooltipWidth = tooltipNode.offsetWidth;
-                        const tooltipHeight = tooltipNode.offsetHeight;
-
-                        if (left + tooltipWidth > window.innerWidth) {
-                            left = event.pageX - tooltipWidth - padding + 50;
-                        }
-
-                        // Prevent tooltip from going off the bottom edge
-                        if (top + tooltipHeight > window.innerHeight) {
-                            top = event.pageY - tooltipHeight - padding - 50;
-                        }
-
-                        // Position the tooltip
-                        tooltip.style("left", `${left}px`)
-                            .style("top", `${top}px`);
+                        // Update tooltip position as mouse moves
+                        const [mouseX, mouseY] = d3.pointer(event, document.body);
+                        tooltip
+                            .style("left", (mouseX + 10) + "px")
+                            .style("top", (mouseY - 10) + "px");
                     })
                     .on("mouseout", function () {
                         // Hide the tooltip
@@ -356,9 +384,8 @@ const loadData = async function () {
 
                         // Reset circle appearance
                         d3.select(this)
-                            .attr("r", () => calculateRadius())
-                            .attr("stroke", "none")
-                            .style("opacity", 0.8);
+                            .style("opacity", 0.9)
+                            .attr("stroke", "none");
                     })
                     .on("click", function (event, d) {
                         if (k === 1) { // Check if currently not zoomed in
@@ -405,7 +432,11 @@ const loadData = async function () {
     }
 
     // Initially show all people
-    showPeople(missingPersonsData, null);
+    console.log("Total data loaded:", allMissingPersonsData.length);
+    console.log("Data with randomPoint:", allMissingPersonsData.filter(d => d.randomPoint).length);
+    showPeople(allMissingPersonsData, null);
+    updateStatistics(allMissingPersonsData, "All");
+    hideLoading();
 
 
     /**
@@ -500,6 +531,13 @@ const loadData = async function () {
 
     // Initial call to set dimensions
     updateDimensions();
+    
+    } catch (error) {
+        console.error("Error loading data:", error);
+        hideLoading();
+        loading.text("Error loading data. Please refresh the page.");
+        loading.style("color", "#e53e3e");
+    }
 };
 
 /**
