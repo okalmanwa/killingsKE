@@ -488,6 +488,14 @@ function updateMap() {
     
     // Add hover and touch events to new elements
     victimsEnter
+        .on("click", function(event, d) {
+            // Toggle blue color on click
+            const isBlue = d3.select(this).style("fill") === "rgb(0, 123, 255)";
+            d3.select(this)
+                .style("fill", isBlue ? "#cc0000" : "#007bff")
+                .style("stroke", isBlue ? "none" : "#ffffff")
+                .style("stroke-width", isBlue ? 0 : 2);
+        })
         .on("mouseover", function(event, d) {
             tooltip.transition()
                 .duration(100)
@@ -612,17 +620,25 @@ function updateMap() {
                     .style("pointer-events", "none");
             }
 
-            // Reset blood droplet appearance
+            // Reset blood droplet appearance (but preserve blue selection)
+            const isSelected = d3.select(this).style("fill") === "rgb(0, 123, 255)";
             d3.select(this)
                 .style("opacity", 0.9)
-                .style("stroke", "none")
-                .style("stroke-width", 0);
+                .style("stroke", isSelected ? "#ffffff" : "none")
+                .style("stroke-width", isSelected ? 2 : 0);
         })
         // Add touch events for mobile devices
         .on("touchstart", function(event, d) {
             event.stopPropagation(); // Prevent event bubbling to SVG
             const touch = event.touches[0];
             if (touch) {
+                // Toggle blue color on touch
+                const isBlue = d3.select(this).style("fill") === "rgb(0, 123, 255)";
+                d3.select(this)
+                    .style("fill", isBlue ? "#cc0000" : "#007bff")
+                    .style("stroke", isBlue ? "none" : "#ffffff")
+                    .style("stroke-width", isBlue ? 0 : 2);
+                
                 tooltip.transition()
                     .duration(100)
                     .style("opacity", 1)
@@ -708,11 +724,12 @@ function updateMap() {
             // On mobile, keep tooltip visible until user closes it manually
             // Don't auto-hide on mobile devices
 
-            // Reset blood droplet appearance
+            // Reset blood droplet appearance (but preserve blue selection)
+            const isSelected = d3.select(this).style("fill") === "rgb(0, 123, 255)";
             d3.select(this)
                 .style("opacity", 0.9)
-                .style("stroke", "none")
-                .style("stroke-width", 0);
+                .style("stroke", isSelected ? "#ffffff" : "none")
+                .style("stroke-width", isSelected ? 2 : 0);
         });
     
     updateStatistics(filteredData);
