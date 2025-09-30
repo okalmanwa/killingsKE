@@ -345,8 +345,6 @@ function zoomToCounty(countyName) {
         .attr("cy", d => projection(d.position)[1])
         .attr("r", window.innerWidth <= 768 ? 12 : 10);
     
-    console.log("Zoomed to county - setting point size to:", window.innerWidth <= 768 ? 12 : 10);
-    
     isZoomedToCounty = true;
     zoomOutBtn.attr("disabled", null);
     
@@ -356,7 +354,6 @@ function zoomToCounty(countyName) {
             .transition()
             .duration(300)
             .attr("r", window.innerWidth <= 768 ? 12 : 10);
-        console.log("Forced size update to:", window.innerWidth <= 768 ? 12 : 10);
     }, 100);
 }
 
@@ -399,7 +396,6 @@ function zoomOut() {
                 .transition()
                 .duration(300)
                 .attr("r", window.innerWidth <= 768 ? 4 : 3);
-            console.log("Forced size reset to:", window.innerWidth <= 768 ? 4 : 3);
         }, 100);
         
         // Reset county selection
@@ -470,9 +466,6 @@ function updateMap() {
         .style("opacity", 0.9)
         .style("cursor", "pointer");
     
-    console.log("Creating new points - isZoomedToCounty:", isZoomedToCounty, "size:", isZoomedToCounty ? 
-        (window.innerWidth <= 768 ? 12 : 10) : 
-        (window.innerWidth <= 768 ? 4 : 3));
     
     // Update - positioning with transition if zooming out
     if (currentCounty === "all" && !isZoomedToCounty) {
@@ -490,9 +483,6 @@ function updateMap() {
                 (window.innerWidth <= 768 ? 12 : 10) : 
                 (window.innerWidth <= 768 ? 4 : 3));
         
-        console.log("Updating existing points - isZoomedToCounty:", isZoomedToCounty, "size:", isZoomedToCounty ? 
-            (window.innerWidth <= 768 ? 12 : 10) : 
-            (window.innerWidth <= 768 ? 4 : 3));
     }
     
     
@@ -500,7 +490,7 @@ function updateMap() {
     victimsEnter
         .on("mouseover", function(event, d) {
             tooltip.transition()
-                .duration(150)
+                .duration(100)
                 .style("opacity", 1)
                 .style("pointer-events", "auto");
             
@@ -520,7 +510,7 @@ function updateMap() {
             };
 
             tooltip.html(`
-                <button class="tooltip-close-btn" onclick="closeTooltip()">×</button>
+                <button class="tooltip-close-btn" onclick="closeTooltip()" style="position: absolute; top: 8px; right: 8px; z-index: 1002;">×</button>
                 <div class="tooltip-header">${d.Name || "Unknown Victim"}</div>
                 <div class="tooltip-row">
                     <div class="tooltip-label">Location</div>
@@ -634,7 +624,7 @@ function updateMap() {
             const touch = event.touches[0];
             if (touch) {
                 tooltip.transition()
-                    .duration(150)
+                    .duration(100)
                     .style("opacity", 1)
                     .style("pointer-events", "auto");
                 
