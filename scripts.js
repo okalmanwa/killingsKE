@@ -292,12 +292,13 @@ function zoomToCounty(countyName) {
                 .duration(800)
                 .attr("d", geoPath);
             
-            // Update victim dots
+            // Update victim dots and reset size
             map.selectAll("circle.victim")
                 .transition()
                 .duration(800)
                 .attr("cx", d => projection(d.position)[0])
-                .attr("cy", d => projection(d.position)[1]);
+                .attr("cy", d => projection(d.position)[1])
+                .attr("r", window.innerWidth <= 768 ? 4 : 3);
             
             isZoomedToCounty = false;
             zoomOutBtn.attr("disabled", true);
@@ -336,15 +337,27 @@ function zoomToCounty(countyName) {
         .duration(800)
         .attr("d", geoPath);
     
-    // Update victim dots
+    // Update victim dots with larger size when zoomed
     map.selectAll("circle.victim")
         .transition()
         .duration(800)
         .attr("cx", d => projection(d.position)[0])
-        .attr("cy", d => projection(d.position)[1]);
+        .attr("cy", d => projection(d.position)[1])
+        .attr("r", window.innerWidth <= 768 ? 12 : 10);
+    
+    console.log("Zoomed to county - setting point size to:", window.innerWidth <= 768 ? 12 : 10);
     
     isZoomedToCounty = true;
     zoomOutBtn.attr("disabled", null);
+    
+    // Force update all existing victim points to new size
+    setTimeout(() => {
+        map.selectAll("circle.victim")
+            .transition()
+            .duration(300)
+            .attr("r", window.innerWidth <= 768 ? 12 : 10);
+        console.log("Forced size update to:", window.innerWidth <= 768 ? 12 : 10);
+    }, 100);
 }
 
 /**
@@ -369,15 +382,25 @@ function zoomOut() {
             .duration(800)
             .attr("d", geoPath);
         
-        // Update victim dots with transition
+        // Update victim dots with transition and reset size
         map.selectAll("circle.victim")
             .transition()
             .duration(800)
             .attr("cx", d => projection(d.position)[0])
-            .attr("cy", d => projection(d.position)[1]);
+            .attr("cy", d => projection(d.position)[1])
+            .attr("r", window.innerWidth <= 768 ? 4 : 3);
         
         isZoomedToCounty = false;
         zoomOutBtn.attr("disabled", true);
+        
+        // Force update all existing victim points to normal size
+        setTimeout(() => {
+            map.selectAll("circle.victim")
+                .transition()
+                .duration(300)
+                .attr("r", window.innerWidth <= 768 ? 4 : 3);
+            console.log("Forced size reset to:", window.innerWidth <= 768 ? 4 : 3);
+        }, 100);
         
         // Reset county selection
         currentCounty = "all";
@@ -440,10 +463,16 @@ function updateMap() {
         .attr("class", "victim")
         .attr("cx", d => projection(d.position)[0])
         .attr("cy", d => projection(d.position)[1])
-        .attr("r", window.innerWidth <= 768 ? 4 : 3)
+        .attr("r", isZoomedToCounty ? 
+            (window.innerWidth <= 768 ? 12 : 10) : 
+            (window.innerWidth <= 768 ? 4 : 3))
         .style("fill", "#cc0000")
         .style("opacity", 0.9)
         .style("cursor", "pointer");
+    
+    console.log("Creating new points - isZoomedToCounty:", isZoomedToCounty, "size:", isZoomedToCounty ? 
+        (window.innerWidth <= 768 ? 12 : 10) : 
+        (window.innerWidth <= 768 ? 4 : 3));
     
     // Update - positioning with transition if zooming out
     if (currentCounty === "all" && !isZoomedToCounty) {
@@ -451,11 +480,19 @@ function updateMap() {
             .transition()
             .duration(600)
             .attr("cx", d => projection(d.position)[0])
-            .attr("cy", d => projection(d.position)[1]);
+            .attr("cy", d => projection(d.position)[1])
+            .attr("r", window.innerWidth <= 768 ? 4 : 3);
     } else {
         victimsEnter.merge(victims)
             .attr("cx", d => projection(d.position)[0])
-            .attr("cy", d => projection(d.position)[1]);
+            .attr("cy", d => projection(d.position)[1])
+            .attr("r", isZoomedToCounty ? 
+                (window.innerWidth <= 768 ? 12 : 10) : 
+                (window.innerWidth <= 768 ? 4 : 3));
+        
+        console.log("Updating existing points - isZoomedToCounty:", isZoomedToCounty, "size:", isZoomedToCounty ? 
+            (window.innerWidth <= 768 ? 12 : 10) : 
+            (window.innerWidth <= 768 ? 4 : 3));
     }
     
     
@@ -464,7 +501,8 @@ function updateMap() {
         .on("mouseover", function(event, d) {
             tooltip.transition()
                 .duration(150)
-                .style("opacity", 1);
+                .style("opacity", 1)
+                .style("pointer-events", "auto");
             
             // Format date for better display
             const formatDate = (dateStr) => {
@@ -482,6 +520,7 @@ function updateMap() {
             };
 
             tooltip.html(`
+                <button class="tooltip-close-btn" onclick="closeTooltip()">×</button>
                 <div class="tooltip-header">${d.Name || "Unknown Victim"}</div>
                 <div class="tooltip-row">
                     <div class="tooltip-label">Location</div>
@@ -579,7 +618,8 @@ function updateMap() {
             if (window.innerWidth > 768) {
                 tooltip.transition()
                     .duration(200)
-                    .style("opacity", 0);
+                    .style("opacity", 0)
+                    .style("pointer-events", "none");
             }
 
             // Reset blood droplet appearance
@@ -595,7 +635,8 @@ function updateMap() {
             if (touch) {
                 tooltip.transition()
                     .duration(150)
-                    .style("opacity", 1);
+                    .style("opacity", 1)
+                    .style("pointer-events", "auto");
                 
                 // Format date for better display
                 const formatDate = (dateStr) => {
@@ -1038,7 +1079,8 @@ function closeTooltip() {
     const tooltip = d3.select(".tooltip");
     tooltip.transition()
         .duration(200)
-        .style("opacity", 0);
+        .style("opacity", 0)
+        .style("pointer-events", "none");
 }
 
 /**
