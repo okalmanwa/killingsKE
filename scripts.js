@@ -851,6 +851,9 @@ window.addEventListener("load", function() {
  */
 const loadData = async function () {
     try {
+        // Show loading screen
+        showLoading();
+        
         // Load Kenya map data
         let kenya = await d3.json('./datasets/kenya.topojson');
         countiesGeoJSON = topojson.feature(kenya, kenya.objects.KENADM1gbOpen);
@@ -1045,9 +1048,14 @@ const loadData = async function () {
         } else {
             updateMap();
         }
+        
+        // Hide loading screen after everything is loaded
+        hideLoading();
     
     } catch (error) {
         console.error("Error loading data:", error);
+        // Hide loading screen even on error
+        hideLoading();
     }
 };
 
@@ -1059,6 +1067,30 @@ function updateCopyrightYear() {
     const yearElement = document.getElementById('current-year');
     if (yearElement) {
         yearElement.textContent = currentYear;
+    }
+}
+
+/**
+ * Show loading screen
+ */
+function showLoading() {
+    const loadingContainer = document.getElementById('loading-container');
+    if (loadingContainer) {
+        loadingContainer.classList.remove('hidden');
+    }
+}
+
+/**
+ * Hide loading screen
+ */
+function hideLoading() {
+    const loadingContainer = document.getElementById('loading-container');
+    if (loadingContainer) {
+        loadingContainer.classList.add('hidden');
+        // Remove from DOM after animation
+        setTimeout(() => {
+            loadingContainer.remove();
+        }, 500);
     }
 }
 
