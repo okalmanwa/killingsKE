@@ -63,6 +63,15 @@ const countyButtons = d3.select("#county-buttons");
 const zoomOutBtn = d3.select("#zoom-out-btn");
 
 let isCollapsed = true;
+
+// Check if screen is small and set collapsed by default
+const isSmallScreen = window.innerWidth <= 768;
+if (isSmallScreen) {
+    isCollapsed = true;
+    filterControls.classed("collapsed", true).classed("expanded", false);
+    filterContent.classed("collapsed", true);
+    toggleBtn.html("☰"); // Use hamburger menu icon instead of +
+}
 let currentCounty = "all";
 let isZoomedToCounty = false;
 
@@ -138,7 +147,7 @@ function toggleFilterPanel() {
     if (isCollapsed) {
         filterControls.classed("collapsed", true).classed("expanded", false);
         filterContent.classed("collapsed", true);
-        toggleBtn.text("+");
+        toggleBtn.html(window.innerWidth <= 768 ? "☰" : "+");
     } else {
         filterControls.classed("collapsed", false).classed("expanded", true);
         filterContent.classed("collapsed", false);
@@ -230,6 +239,7 @@ function createCountyFilter() {
             .filter(d => d === selectedCounty)
             .classed("active", true);
         
+        // Force update the map with new county selection
         updateMap();
     });
 }
@@ -347,19 +357,19 @@ function zoomOut() {
             .fitSize([mapwidth, mapHeight], countiesGeoJSON);
         geoPath = d3.geoPath().projection(projection);
         
-        // Update county paths
+        // Update county paths with transition
         map.selectAll("path.county")
             .transition()
             .duration(800)
             .attr("d", geoPath);
         
-        // Update border mesh
+        // Update border mesh with transition
         map.select(".mesh-border")
             .transition()
             .duration(800)
             .attr("d", geoPath);
         
-        // Update victim dots
+        // Update victim dots with transition
         map.selectAll("circle.victim")
             .transition()
             .duration(800)
@@ -377,7 +387,10 @@ function zoomOut() {
             .filter(d => d === "all")
             .classed("active", true);
         
-        updateMap();
+        // Force update the map with current filters after transition
+        setTimeout(() => {
+            updateMap();
+        }, 850); // Wait for transition to complete
     }
 }
 
@@ -392,101 +405,267 @@ function updateMap() {
     if (currentCounty !== "all") {
         zoomToCounty(currentCounty);
     } else {
-        zoomToCounty("all"); // Zoom out
+        // Reset to full view when switching to "all"
+        if (isZoomedToCounty) {
+            projection = d3.geoMercator()
+                .fitSize([mapwidth, mapHeight], countiesGeoJSON);
+            geoPath = d3.geoPath().projection(projection);
+            
+            // Update all map elements with transition
+            map.selectAll("path.county")
+                .transition()
+                .duration(600)
+                .attr("d", geoPath);
+            
+            map.select(".mesh-border")
+                .transition()
+                .duration(600)
+                .attr("d", geoPath);
+            
+            isZoomedToCounty = false;
+            zoomOutBtn.attr("disabled", true);
+        }
     }
     
-    // Update victim dots with smooth transitions
+    // Update victim circles - no transitions for maximum speed
     const victims = map.selectAll("circle.victim")
         .data(filteredData, d => d.Name + d.Location);
     
-    // Exit transition
-    victims.exit()
-        .transition()
-        .duration(500)
-        .style("opacity", 0)
-        .attr("r", 0)
-        .remove();
+    // Exit - immediate removal
+    victims.exit().remove();
     
-    // Enter transition
+    // Enter - immediate creation
     const victimsEnter = victims.enter()
         .append("circle")
         .attr("class", "victim")
         .attr("cx", d => projection(d.position)[0])
         .attr("cy", d => projection(d.position)[1])
-        .attr("r", 0)
-        .style("fill", "#e53e3e")
-        .style("opacity", 0)
+        .attr("r", window.innerWidth <= 768 ? 4 : 3)
+        .style("fill", "#cc0000")
+        .style("opacity", 0.9)
         .style("cursor", "pointer");
     
-    // Merge and update
-    victimsEnter.merge(victims)
-        .transition()
-        .duration(500)
-        .attr("cx", d => projection(d.position)[0])
-        .attr("cy", d => projection(d.position)[1])
-        .attr("r", window.innerWidth <= 768 ? 4 : 3) // Larger points on mobile
-        .style("opacity", 0.8);
+    // Update - positioning with transition if zooming out
+    if (currentCounty === "all" && !isZoomedToCounty) {
+        victimsEnter.merge(victims)
+            .transition()
+            .duration(600)
+            .attr("cx", d => projection(d.position)[0])
+            .attr("cy", d => projection(d.position)[1]);
+    } else {
+        victimsEnter.merge(victims)
+            .attr("cx", d => projection(d.position)[0])
+            .attr("cy", d => projection(d.position)[1]);
+    }
     
     
     // Add hover and touch events to new elements
     victimsEnter
         .on("mouseover", function(event, d) {
             tooltip.transition()
-                .duration(200)
+                .duration(150)
                 .style("opacity", 1);
             
-            tooltip.html(`
-                <div><strong>Name:</strong> ${d.Name}</div>
-                <div><strong>Location:</strong> ${d.Location}</div>
-                <div><strong>County:</strong> ${d.County}</div>
-                <div><strong>Manner of Death:</strong> ${d["Manner of Death"]}</div>
-                <div><strong>Date:</strong> ${d["Date of Incident"]}</div>
-            `)
-            .style("left", (event.pageX + 10) + "px")
-            .style("top", (event.pageY - 10) + "px");
+            // Format date for better display
+            const formatDate = (dateStr) => {
+                if (!dateStr || dateStr === "Unknown") return "Unknown";
+                try {
+                    const date = new Date(dateStr);
+                    return date.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                    });
+                } catch {
+                    return dateStr;
+                }
+            };
 
+            tooltip.html(`
+                <div class="tooltip-header">${d.Name || "Unknown Victim"}</div>
+                <div class="tooltip-row">
+                    <div class="tooltip-label">Location</div>
+                    <div class="tooltip-value tooltip-location">${d.Location || "Unknown"}</div>
+                </div>
+                <div class="tooltip-row">
+                    <div class="tooltip-label">County</div>
+                    <div class="tooltip-value">${d.County || "Unknown"}</div>
+                </div>
+                <div class="tooltip-row">
+                    <div class="tooltip-label">Manner</div>
+                    <div class="tooltip-value tooltip-manner">${d["Manner of Death"] || "Unknown"}</div>
+                </div>
+                <div class="tooltip-row">
+                    <div class="tooltip-label">Date</div>
+                    <div class="tooltip-value tooltip-date">${formatDate(d["Date of Incident"])}</div>
+                </div>
+                ${d.Description ? `
+                <div class="tooltip-row tooltip-description">
+                    <div class="tooltip-label">Details</div>
+                    <div class="tooltip-value tooltip-description-text">${d.Description}</div>
+                </div>
+                ` : ''}
+            `);
+
+            // Smart positioning to avoid going off-screen
+            const tooltipWidth = 380; // Max width from CSS
+            const tooltipHeight = 200; // Estimated height
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            let left = event.pageX + 15;
+            let top = event.pageY - 20;
+            
+            // Adjust horizontal position if tooltip would go off right edge
+            if (left + tooltipWidth > viewportWidth) {
+                left = event.pageX - tooltipWidth - 15; // Show to the left
+            }
+            
+            // Adjust vertical position if tooltip would go off bottom edge
+            if (top + tooltipHeight > viewportHeight) {
+                top = event.pageY - tooltipHeight - 20; // Show above cursor
+            }
+            
+            // Ensure tooltip doesn't go off left edge
+            if (left < 10) {
+                left = 10;
+            }
+            
+            // Ensure tooltip doesn't go off top edge
+            if (top < 10) {
+                top = 10;
+            }
+
+            tooltip
+                .style("left", left + "px")
+                .style("top", top + "px");
+
+            // Highlight the blood droplet
             d3.select(this)
                 .style("opacity", 1)
-                .style("stroke", "black")
+                .style("stroke", "#ff0000")
                 .style("stroke-width", 2);
         })
         .on("mousemove", function(event) {
+            // Smart positioning for mousemove as well
+            const tooltipWidth = 380;
+            const tooltipHeight = 200;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            let left = event.pageX + 15;
+            let top = event.pageY - 20;
+            
+            // Adjust horizontal position if tooltip would go off right edge
+            if (left + tooltipWidth > viewportWidth) {
+                left = event.pageX - tooltipWidth - 15;
+            }
+            
+            // Adjust vertical position if tooltip would go off bottom edge
+            if (top + tooltipHeight > viewportHeight) {
+                top = event.pageY - tooltipHeight - 20;
+            }
+            
+            // Ensure tooltip doesn't go off edges
+            if (left < 10) left = 10;
+            if (top < 10) top = 10;
+            
             tooltip
-                .style("left", (event.pageX + 10) + "px")
-                .style("top", (event.pageY - 10) + "px");
+                .style("left", left + "px")
+                .style("top", top + "px");
         })
         .on("mouseout", function() {
             tooltip.transition()
                 .duration(200)
                 .style("opacity", 0);
 
+            // Reset blood droplet appearance
             d3.select(this)
-                .style("opacity", 0.8)
+                .style("opacity", 0.9)
                 .style("stroke", "none")
                 .style("stroke-width", 0);
         })
         // Add touch events for mobile devices
         .on("touchstart", function(event, d) {
             event.stopPropagation(); // Prevent event bubbling to SVG
-            const touch = d3.touches(this)[0];
+            const touch = event.touches[0];
             if (touch) {
                 tooltip.transition()
-                    .duration(200)
+                    .duration(150)
                     .style("opacity", 1);
                 
-                tooltip.html(`
-                    <div><strong>Name:</strong> ${d.Name}</div>
-                    <div><strong>Location:</strong> ${d.Location}</div>
-                    <div><strong>County:</strong> ${d.County}</div>
-                    <div><strong>Manner of Death:</strong> ${d["Manner of Death"]}</div>
-                    <div><strong>Date:</strong> ${d["Date of Incident"]}</div>
-                `)
-                .style("left", (touch[0] + 10) + "px")
-                .style("top", (touch[1] - 10) + "px");
+                // Format date for better display
+                const formatDate = (dateStr) => {
+                    if (!dateStr || dateStr === "Unknown") return "Unknown";
+                    try {
+                        const date = new Date(dateStr);
+                        return date.toLocaleDateString('en-US', { 
+                            year: 'numeric', 
+                            month: 'short', 
+                            day: 'numeric' 
+                        });
+                    } catch {
+                        return dateStr;
+                    }
+                };
 
+                tooltip.html(`
+                    <div class="tooltip-header">${d.Name || "Unknown Victim"}</div>
+                    <div class="tooltip-row">
+                        <div class="tooltip-label">Location</div>
+                        <div class="tooltip-value tooltip-location">${d.Location || "Unknown"}</div>
+                    </div>
+                    <div class="tooltip-row">
+                        <div class="tooltip-label">County</div>
+                        <div class="tooltip-value">${d.County || "Unknown"}</div>
+                    </div>
+                    <div class="tooltip-row">
+                        <div class="tooltip-label">Manner</div>
+                        <div class="tooltip-value tooltip-manner">${d["Manner of Death"] || "Unknown"}</div>
+                    </div>
+                    <div class="tooltip-row">
+                        <div class="tooltip-label">Date</div>
+                        <div class="tooltip-value tooltip-date">${formatDate(d["Date of Incident"])}</div>
+                    </div>
+                    ${d.Description ? `
+                    <div class="tooltip-row tooltip-description">
+                        <div class="tooltip-label">Details</div>
+                        <div class="tooltip-value tooltip-description-text">${d.Description}</div>
+                    </div>
+                    ` : ''}
+                `);
+
+                // Smart positioning for touch events
+                const tooltipWidth = 380;
+                const tooltipHeight = 200;
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                
+                let left = touch.clientX + 15;
+                let top = touch.clientY - 20;
+                
+                // Adjust horizontal position if tooltip would go off right edge
+                if (left + tooltipWidth > viewportWidth) {
+                    left = touch.clientX - tooltipWidth - 15;
+                }
+                
+                // Adjust vertical position if tooltip would go off bottom edge
+                if (top + tooltipHeight > viewportHeight) {
+                    top = touch.clientY - tooltipHeight - 20;
+                }
+                
+                // Ensure tooltip doesn't go off edges
+                if (left < 10) left = 10;
+                if (top < 10) top = 10;
+                
+                tooltip
+                    .style("left", left + "px")
+                    .style("top", top + "px");
+
+                // Highlight the blood droplet
                 d3.select(this)
                     .style("opacity", 1)
-                    .style("stroke", "black")
+                    .style("stroke", "#ff0000")
                     .style("stroke-width", 2);
             }
         })
@@ -499,8 +678,9 @@ function updateMap() {
                     .style("opacity", 0);
             }, 2000);
 
+            // Reset blood droplet appearance
             d3.select(this)
-                .style("opacity", 0.8)
+                .style("opacity", 0.9)
                 .style("stroke", "none")
                 .style("stroke-width", 0);
         });
@@ -540,6 +720,7 @@ function updateDimensions() {
         map.select(".mesh-border")
             .attr("d", geoPath);
 
+        // Update victim dots with proper positioning
         map.selectAll("circle.victim")
             .attr("cx", d => projection(d.position)[0])
             .attr("cy", d => projection(d.position)[1]);
@@ -556,17 +737,18 @@ function setupTouchEvents() {
     
     svg.on("touchstart", function(event) {
         // Don't prevent default to allow normal touch interactions
-        startTouch = d3.touches(this)[0];
+        const touch = event.touches[0];
+        startTouch = touch ? [touch.clientX, touch.clientY] : null;
         touchStartTime = Date.now();
         isDragging = false;
     })
     .on("touchmove", function(event) {
         if (startTouch) {
-            const currentTouch = d3.touches(this)[0];
+            const currentTouch = event.touches[0];
             if (currentTouch) {
                 const distance = Math.sqrt(
-                    Math.pow(currentTouch[0] - startTouch[0], 2) + 
-                    Math.pow(currentTouch[1] - startTouch[1], 2)
+                    Math.pow(currentTouch.clientX - startTouch[0], 2) + 
+                    Math.pow(currentTouch.clientY - startTouch[1], 2)
                 );
                 // If touch moved more than 10 pixels, consider it dragging
                 if (distance > 10) {
@@ -593,7 +775,25 @@ function setupTouchEvents() {
 let resizeTimeout;
 function debouncedResize() {
     clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(updateDimensions, 150);
+    resizeTimeout = setTimeout(() => {
+        updateDimensions();
+        
+        // Update collapsed state based on screen size
+        const newIsSmallScreen = window.innerWidth <= 768;
+        if (newIsSmallScreen && !isCollapsed) {
+            // Collapse on small screens
+            isCollapsed = true;
+            filterControls.classed("collapsed", true).classed("expanded", false);
+            filterContent.classed("collapsed", true);
+            toggleBtn.html("☰");
+        } else if (!newIsSmallScreen && isCollapsed) {
+            // Expand on larger screens
+            isCollapsed = false;
+            filterControls.classed("collapsed", false).classed("expanded", true);
+            filterContent.classed("collapsed", false);
+            toggleBtn.text("−");
+        }
+    }, 150);
 }
 
 // Handle window resize
@@ -602,6 +802,18 @@ window.addEventListener("resize", debouncedResize);
 // Handle orientation change for mobile devices
 window.addEventListener("orientationchange", function() {
     setTimeout(updateDimensions, 100);
+});
+
+// Handle window load to ensure proper positioning on mobile
+window.addEventListener("load", function() {
+    if (window.innerWidth <= 768) {
+        setTimeout(() => {
+            updateDimensions();
+            if (allMissingPersonsData.length > 0) {
+                updateMap();
+            }
+        }, 200);
+    }
 });
 
 /**
@@ -733,6 +945,8 @@ const loadData = async function () {
         allMissingPersonsData = victimsWithPositions;
         console.log(`Positioned ${allMissingPersonsData.length} victims on the map`);
 
+    // Simplified rendering for better performance
+
     // Draw the map with individual county paths
     map.selectAll("path.county")
         .data(countiesGeoJSON.features)
@@ -788,11 +1002,19 @@ const loadData = async function () {
         // Setup touch events for mobile
         setupTouchEvents();
         
-        // Initial map update
-        updateMap();
-
         // Initial call to set dimensions
         updateDimensions();
+
+        // Initial map update with delay for mobile devices
+        if (window.innerWidth <= 768) {
+            // Add delay for mobile devices to ensure proper positioning
+            setTimeout(() => {
+                updateDimensions();
+                updateMap();
+            }, 100);
+        } else {
+            updateMap();
+        }
     
     } catch (error) {
         console.error("Error loading data:", error);
