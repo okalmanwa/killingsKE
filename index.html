@@ -130,6 +130,17 @@
                 touch-action: manipulation;
                 pointer-events: auto;
             }
+
+            /* Mobile tooltip styles */
+            .tooltip {
+                pointer-events: auto;
+                max-width: 90vw;
+                padding: 16px 20px;
+            }
+
+            .tooltip::before {
+                display: none;
+            }
         }
 
         .tooltip {
@@ -150,6 +161,7 @@
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.5;
         }
+
 
         .tooltip::before {
             content: '';

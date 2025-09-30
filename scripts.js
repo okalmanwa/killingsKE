@@ -575,9 +575,12 @@ function updateMap() {
                 .style("top", top + "px");
         })
         .on("mouseout", function() {
-            tooltip.transition()
-                .duration(200)
-                .style("opacity", 0);
+            // Only hide on desktop, not on mobile devices
+            if (window.innerWidth > 768) {
+                tooltip.transition()
+                    .duration(200)
+                    .style("opacity", 0);
+            }
 
             // Reset blood droplet appearance
             d3.select(this)
@@ -671,12 +674,8 @@ function updateMap() {
         })
         .on("touchend", function(event, d) {
             event.stopPropagation(); // Prevent event bubbling to SVG
-            // Keep tooltip visible for a moment on mobile
-            setTimeout(() => {
-                tooltip.transition()
-                    .duration(200)
-                    .style("opacity", 0);
-            }, 2000);
+            // On mobile, keep tooltip visible until user closes it manually
+            // Don't auto-hide on mobile devices
 
             // Reset blood droplet appearance
             d3.select(this)
@@ -1033,9 +1032,47 @@ function updateCopyrightYear() {
 }
 
 /**
+ * Close tooltip function
+ */
+function closeTooltip() {
+    const tooltip = d3.select(".tooltip");
+    tooltip.transition()
+        .duration(200)
+        .style("opacity", 0);
+}
+
+/**
+ * Setup click-outside-to-close functionality
+ */
+function setupClickOutsideToClose() {
+    // Add click event listener to document
+    document.addEventListener('click', function(event) {
+        const tooltip = d3.select(".tooltip");
+        const tooltipNode = tooltip.node();
+        
+        // Check if tooltip is visible
+        if (tooltip.style('opacity') === '1' || tooltip.style('opacity') === '0.9') {
+            // Check if click is outside tooltip
+            if (tooltipNode && !tooltipNode.contains(event.target)) {
+                // Check if click is not on a victim point
+                const isVictimClick = event.target.classList.contains('victim') || 
+                                    event.target.closest('.victim');
+                
+                if (!isVictimClick) {
+                    closeTooltip();
+                }
+            }
+        }
+    });
+}
+
+/**
  * Initiate map loading and rendering
  */
 loadData();
+
+// Setup click-outside-to-close functionality
+setupClickOutsideToClose();
 
 // Update copyright year on page load
 updateCopyrightYear();
